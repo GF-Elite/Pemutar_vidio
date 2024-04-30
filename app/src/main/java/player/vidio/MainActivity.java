@@ -7,6 +7,9 @@ import java.io.File;
 import android.os.Handler;
 import android.os.Looper;
 import android.media.MediaPlayer;
+import android.content.SharedPreferences;
+import android.view.View;
+import android.widget.Button;
 
 public class MainActivity extends Activity {
 	
@@ -14,7 +17,10 @@ public class MainActivity extends Activity {
 	private int currentIndex = 0;
 	private VideoView videoView;
 	private Handler handler;
-	private int currentPosition = 0;
+	private SharedPreferences sharedPreferences;
+	private static final String LAST_PLAYED_VIDEO_INDEX = "last_played_video_index";
+	private Button pausePlayButton;
+	private boolean isPaused = false;
 	
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -22,53 +28,43 @@ public class MainActivity extends Activity {
 		setContentView(R.layout.activity_main);
 		
 		videoView = findViewById(R.id.videoView);
+		pausePlayButton = findViewById(R.id.pausePlayButton);
 		handler = new Handler(Looper.getMainLooper());
+		sharedPreferences = getPreferences(MODE_PRIVATE);
 		
 		// Ganti path direktori sesuai kebutuhan Anda
 		File directory = new File("/storage/sdcard1/tiktok_ku/");
 		if (directory.isDirectory()) {
 			videoPaths = directory.list();
-			// Cek apakah ada posisi video yang disimpan
-			if (savedInstanceState != null) {
-				currentPosition = savedInstanceState.getInt("currentPosition");
+			currentIndex = sharedPreferences.getInt(LAST_PLAYED_VIDEO_INDEX, 0);
+			playVideo(currentIndex);
+		}
+		
+		pausePlayButton.setOnClickListener(new View.OnClickListener() {
+			@Override
+			public void onClick(View view) {
+				if (isPaused) {
+					videoView.start();
+					pausePlayButton.setText("Pause");
+					} else {
+					videoView.pause();
+					pausePlayButton.setText("Play");
+				}
+				isPaused = !isPaused;
 			}
-			playNextVideo();
-		}
+		});
 	}
 	
-	@Override
-	protected void onResume() {
-		super.onResume();
-		// Lanjutkan video dari posisi yang disimpan
-		if (videoView != null && currentPosition > 0) {
-			videoView.seekTo(currentPosition);
-			videoView.start();
-		}
-	}
-	
-	@Override
-	protected void onPause() {
-		super.onPause();
-		// Simpan posisi video saat keluar dari aplikasi
-		if (videoView != null) {
-			currentPosition = videoView.getCurrentPosition();
-			videoView.pause();
-		}
-	}
-	
-	private void playNextVideo() {
-		if (currentIndex < videoPaths.length) {
-			String videoPath = "/storage/sdcard1/tiktok_ku/" + videoPaths[currentIndex];
+	private void playVideo(int index) {
+		if (index < videoPaths.length) {
+			String videoPath = "/storage/sdcard1/tiktok_ku/" + videoPaths[index];
 			videoView.setVideoURI(Uri.parse(videoPath));
 			videoView.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
 				@Override
-				public void onPrepared(MediaPlayer mediaPlayer) {
-					// Set posisi video dari posisi yang disimpan
-					mediaPlayer.seekTo(currentPosition);
-					mediaPlayer.start();
+				public void onPrepared(MediaPlayer mp) {
+					videoView.start();
 				}
 			});
-			currentIndex++;
 			
 			videoView.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
 				@Override
@@ -77,18 +73,15 @@ public class MainActivity extends Activity {
 					handler.post(new Runnable() {
 						@Override
 						public void run() {
-							playNextVideo();
+							int nextIndex = (index + 1) % videoPaths.length;
+							playVideo(nextIndex);
 						}
 					});
 				}
 			});
+			
+			// Simpan indeks video terakhir yang dimainkan
+			sharedPreferences.edit().putInt(LAST_PLAYED_VIDEO_INDEX, index).apply();
 		}
-	}
-	
-	@Override
-	protected void onSaveInstanceState(Bundle outState) {
-		super.onSaveInstanceState(outState);
-		// Simpan posisi video saat perubahan konfigurasi (misalnya rotasi layar)
-		outState.putInt("currentPosition", currentPosition);
 	}
 }
